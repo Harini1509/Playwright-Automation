@@ -4,16 +4,23 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npx playwright test webapi.spec.js --headed"
+    "test": "npx playwright test webapi.spec.js --headed",
+    "test:cucumber": "npx cucumber-js",
+    "test:cucumber:headed": "npx cucumber-js --format progress-bar",
+    "report": "node generate-report.js",
+    "test:cucumber:report": "npx cucumber-js && node generate-report.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "@types/node": "^24.3.1"
+    "@cucumber/cucumber": "^12.8.1",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^24.3.1",
+    "multiple-cucumber-html-reporter": "^3.10.0"
   },
   "dependencies": {
+    "@playwright/cli": "^0.1.6",
     "exceljs": "^4.4.0"
   }
 }

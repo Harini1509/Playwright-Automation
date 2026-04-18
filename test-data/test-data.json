@@ -1,0 +1,27 @@
+{
+  "users": {
+    "validUser": {
+      "email": "harinishanthig1999@gmail.com",
+      "password": "Believe@13*"
+    },
+    "invalidUser": {
+      "email": "invalid@gmail.com",
+      "password": "wrongpassword"
+    }
+  },
+  "products": {
+    "products_to_add": [
+      "ADIDAS ORIGINAL",
+      "IPHONE 13 PRO"
+    ],
+    "single_product": "ADIDAS ORIGINAL",
+    "alternate_product": "ZARA COAT 3"
+  },
+  "checkout": {
+    "country": "India",
+    "expected_confirmation": "Thankyou"
+  },
+  "urls": {
+    "login_url": "https://rahulshettyacademy.com/client"
+  }
+}
