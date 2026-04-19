@@ -2,11 +2,8 @@ pipeline {
     agent any
 
     options {
-        // Keep last 10 builds
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Timeout after 30 minutes
         timeout(time: 30, unit: 'MINUTES')
-        // Add timestamps to console output
         timestamps()
     }
 
@@ -18,102 +15,99 @@ pipeline {
         )
         booleanParam(
             name: 'HEADLESS_MODE',
-            defaultValue: false,
-            description: 'Run tests in headless mode'
+            defaultValue: true,
+            description: 'Run tests in headless mode (true for CI)'
         )
     }
 
     environment {
-        NODE_ENV = 'test'
-        WORKSPACE_PATH = "${WORKSPACE}"
+        NODE_ENV         = 'test'
+        PARALLEL_WORKERS = "${params.PARALLEL_WORKERS}"
+        HEADLESS         = "${params.HEADLESS_MODE}"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                echo '🔄 Checking out repository...'
+                echo 'Checking out repository...'
                 deleteDir()
                 checkout([$class: 'GitSCM',
                     branches: [[name: '*/main']],
                     extensions: [[$class: 'CloneOption', noTags: false, reference: '', shallow: false]],
-                    userRemoteConfigs: [[url: 'https://github.com/your-username/your-repo.git']]
+                    userRemoteConfigs: [[url: 'https://github.com/Harini1509/Playwright-Automation.git']]
                 ])
-                echo '✅ Repository checked out successfully'
+                echo 'Checkout done'
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                echo '📦 Installing dependencies...'
+                echo 'Installing npm dependencies...'
                 sh '''
                     node -v
                     npm -v
                     npm install
+                    npx playwright install --with-deps
                 '''
-                echo '✅ Dependencies installed'
             }
         }
 
         stage('Update Cucumber Config') {
             steps {
-                echo '⚙️ Updating Cucumber configuration...'
+                echo 'Patching parallel workers in cucumber.js...'
                 script {
-                    def cucumberConfig = readFile('cucumber.js')
-                    cucumberConfig = cucumberConfig.replace('parallel: 2', "parallel: ${params.PARALLEL_WORKERS}")
-                    writeFile file: 'cucumber.js', text: cucumberConfig
+                    def config = readFile('cucumber.js')
+                    config = config.replaceAll(/parallel:\s*\d+/, "parallel: ${env.PARALLEL_WORKERS}")
+                    writeFile file: 'cucumber.js', text: config
                     sh 'cat cucumber.js'
                 }
             }
         }
 
-        stage('Run Tests') {
+        stage('Run Cucumber Tests') {
             steps {
-                echo '🧪 Running Cucumber tests...'
+                echo 'Running Cucumber + Playwright tests...'
                 sh '''
-                    echo "Running tests with ${PARALLEL_WORKERS} parallel workers"
-                    npm run test:cucumber || true
+                    echo "Workers : $PARALLEL_WORKERS"
+                    echo "Headless: $HEADLESS"
+                    npx cucumber-js || true
                 '''
+                // ✅ Calls cucumber-js directly — matches your test:cucumber script
+                // ✅ || true prevents Jenkins failing before report is generated
             }
         }
 
-        stage('Generate Reports') {
+        stage('Generate Report') {
             steps {
-                echo '📊 Generating test reports...'
-                script {
-                    // Copy HTML report
-                    sh '''
-                        if [ -f cucumber-report.html ]; then
-                            cp cucumber-report.html test-results/ 2>/dev/null || true
-                            echo "✅ HTML report generated"
-                        fi
-                        
-                        # List generated files
-                        echo "Generated artifacts:"
-                        find . -name "cucumber-report*" -o -name "*.png" | head -20
-                    '''
-                }
+                echo 'Generating HTML report...'
+                sh '''
+                    node generate-report.js
+                '''
+                // ✅ Matches your "report" script — generate-report.js is at root
             }
         }
 
         stage('Archive Results') {
             steps {
-                echo '📦 Archiving test results...'
+                echo 'Archiving artifacts...'
                 script {
-                    // Archive all test results
-                    archiveArtifacts artifacts: 'cucumber-report.html, test-results/**, cucumber-report.json', 
+                    archiveArtifacts artifacts: 'cucumber-report.html,cucumber-report.json',
                                      allowEmptyArchive: true
-                    
-                    // Publish HTML report
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: '.',
-                        reportFiles: 'cucumber-report.html',
-                        reportName: 'Cucumber Test Report'
-                    ])
-                    
-                    echo '✅ Results archived'
+
+                    if (fileExists('cucumber-report.html')) {
+                        publishHTML([
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: true,
+                            keepAll: true,
+                            reportDir: '.',
+                            reportFiles: 'cucumber-report.html',
+                            reportName: 'Cucumber Test Report'
+                        ])
+                        echo 'HTML report published'
+                    } else {
+                        echo 'cucumber-report.html not found'
+                    }
                 }
             }
         }
@@ -121,36 +115,27 @@ pipeline {
 
     post {
         always {
-            echo '🧹 Cleaning up...'
-            script {
-                // Collect test statistics
-                sh '''
-                    echo "Test Statistics:"
-                    if [ -f cucumber-report.json ]; then
-                        echo "JSON report found at: $(pwd)/cucumber-report.json"
-                        cat cucumber-report.json | head -50
-                    fi
-                '''
-            }
+            echo 'Pipeline finished.'
+            sh '''
+                if [ -f cucumber-report.json ]; then
+                    echo "--- Test summary ---"
+                    head -80 cucumber-report.json
+                fi
+            '''
         }
 
         success {
-            echo '✅ Pipeline completed successfully!'
-            // Send success notification
-            sh 'echo "✅ All tests passed!" '
+            echo 'All tests passed!'
         }
 
         failure {
-            echo '❌ Pipeline failed!'
-            // Archive failure screenshots
-            archiveArtifacts artifacts: 'test-results/screenshots/**', 
+            echo 'Tests failed — check the Cucumber Report above.'
+            archiveArtifacts artifacts: 'test-results/**',
                              allowEmptyArchive: true
-            // Send failure notification
-            sh 'echo "❌ Tests failed. Check the Cucumber Report above."'
         }
 
         unstable {
-            echo '⚠️ Pipeline unstable - some tests failed'
+            echo 'Pipeline unstable — partial test failures.'
         }
     }
 }
