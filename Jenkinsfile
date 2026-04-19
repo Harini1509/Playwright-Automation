@@ -11,12 +11,12 @@ pipeline {
         choice(
             name: 'PARALLEL_WORKERS',
             choices: ['1', '2', '4'],
-            description: 'Number of parallel workers for test execution'
+            description: 'Number of parallel workers'
         )
         booleanParam(
             name: 'HEADLESS_MODE',
             defaultValue: true,
-            description: 'Run tests in headless mode (true for CI)'
+            description: 'Run tests in headless mode'
         )
     }
 
@@ -43,8 +43,8 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                echo 'Installing npm dependencies...'
-                sh '''
+                echo 'Installing dependencies...'
+                bat '''
                     node -v
                     npm -v
                     npm install
@@ -55,87 +55,33 @@ pipeline {
 
         stage('Update Cucumber Config') {
             steps {
-                echo 'Patching parallel workers in cucumber.js...'
+                echo 'Updating cucumber.js parallel workers...'
                 script {
                     def config = readFile('cucumber.js')
                     config = config.replaceAll(/parallel:\s*\d+/, "parallel: ${env.PARALLEL_WORKERS}")
                     writeFile file: 'cucumber.js', text: config
-                    sh 'cat cucumber.js'
+                    bat 'type cucumber.js'
                 }
             }
         }
 
         stage('Run Cucumber Tests') {
             steps {
-                echo 'Running Cucumber + Playwright tests...'
-                sh '''
-                    echo "Workers : $PARALLEL_WORKERS"
-                    echo "Headless: $HEADLESS"
-                    npx cucumber-js || true
+                echo 'Running tests...'
+                bat '''
+                    echo Workers: %PARALLEL_WORKERS%
+                    echo Headless: %HEADLESS%
+                    npx cucumber-js || exit 0
                 '''
-                // ✅ Calls cucumber-js directly — matches your test:cucumber script
-                // ✅ || true prevents Jenkins failing before report is generated
             }
         }
 
         stage('Generate Report') {
             steps {
                 echo 'Generating HTML report...'
-                sh '''
-                    node generate-report.js
-                '''
-                // ✅ Matches your "report" script — generate-report.js is at root
+                bat 'node generate-report.js'
             }
         }
 
         stage('Archive Results') {
             steps {
-                echo 'Archiving artifacts...'
-                script {
-                    archiveArtifacts artifacts: 'cucumber-report.html,cucumber-report.json',
-                                     allowEmptyArchive: true
-
-                    if (fileExists('cucumber-report.html')) {
-                        publishHTML([
-                            allowMissing: false,
-                            alwaysLinkToLastBuild: true,
-                            keepAll: true,
-                            reportDir: '.',
-                            reportFiles: 'cucumber-report.html',
-                            reportName: 'Cucumber Test Report'
-                        ])
-                        echo 'HTML report published'
-                    } else {
-                        echo 'cucumber-report.html not found'
-                    }
-                }
-            }
-        }
-    }
-
-    post {
-        always {
-            echo 'Pipeline finished.'
-            sh '''
-                if [ -f cucumber-report.json ]; then
-                    echo "--- Test summary ---"
-                    head -80 cucumber-report.json
-                fi
-            '''
-        }
-
-        success {
-            echo 'All tests passed!'
-        }
-
-        failure {
-            echo 'Tests failed — check the Cucumber Report above.'
-            archiveArtifacts artifacts: 'test-results/**',
-                             allowEmptyArchive: true
-        }
-
-        unstable {
-            echo 'Pipeline unstable — partial test failures.'
-        }
-    }
-}
