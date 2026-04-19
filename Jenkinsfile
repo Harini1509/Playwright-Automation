@@ -85,3 +85,53 @@ pipeline {
 
         stage('Archive Results') {
             steps {
+                echo 'Archiving results...'
+                script {
+                    archiveArtifacts artifacts: 'cucumber-report.html,cucumber-report.json',
+                                     allowEmptyArchive: true
+
+                    if (fileExists('cucumber-report.html')) {
+                        publishHTML([
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: true,
+                            keepAll: true,
+                            reportDir: '.',
+                            reportFiles: 'cucumber-report.html',
+                            reportName: 'Cucumber Test Report'
+                        ])
+                        echo 'Report published'
+                    } else {
+                        echo 'Report not found'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished.'
+            script {
+                if (fileExists('cucumber-report.json')) {
+                    bat 'type cucumber-report.json'
+                } else {
+                    echo 'No JSON report found'
+                }
+            }
+        }
+
+        success {
+            echo 'All tests passed!'
+        }
+
+        failure {
+            echo 'Tests failed — check report above.'
+            archiveArtifacts artifacts: 'test-results/**',
+                             allowEmptyArchive: true
+        }
+
+        unstable {
+            echo 'Pipeline unstable — some tests failed.'
+        }
+    }
+}
