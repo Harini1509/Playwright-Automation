@@ -77,11 +77,14 @@ pipeline {
         }
 
         stage('Generate Report') {
-            steps {
-                echo 'Generating HTML report...'
-                bat 'node generate-report.js'
-            }
-        }
+    steps {
+        echo 'Generating HTML report...'
+        bat '''
+            npm install multiple-cucumber-html-reporter
+            node generate-report.js
+        '''
+    }
+}
 
         stage('Archive Results') {
             steps {
